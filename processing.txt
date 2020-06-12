@@ -1,0 +1,7 @@
+##ehpm_data = pd.read_spss('./data/EHPM 2019.sav')
+#ehpm_merged = ehpm_data.merge(map_shape, how='inner', on='codigomunic')
+#ehpm_merged = ehpm_merged[['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog', 'codigomunic', 'depto','geometry']]
+#ehpm_merged_sample = ehpm_merged.sample(frac=0.50)
+#gdf = gpd.GeoDataFrame(ehpm_merged_sample, geometry='geometry')
+#gdf.crs = "EPSG:4326" 
+#gf.to_geofeather(gdf, './data/ehpm19_merged_sample.feather')
