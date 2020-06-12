@@ -1,3 +1,11 @@
+import pandas as pd
+import geopandas as gpd
+import geofeather as gf
+import numpy as np
+import os
+import copy
+import base64
+import json
 import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
@@ -6,35 +14,26 @@ import dash_table
 import plotly
 import plotly.express as px
 from flask import Flask
-import pandas as pd
-import geopandas as gpd
-import numpy as np
-import os
-import copy
-import base64
-import json
 
 # API keys and datasets
 mb_token = 'pk.eyJ1IjoiamF2aS1hbGZhcm8iLCJhIjoiY2tiMnR0cm5zMDBoejJ4cWNxb3Bzcno5aiJ9.Zh0OEJmyiH27YG4Yw_KLyg'
-ehpm_data = pd.read_spss('/content/drive/My Drive/EHPM/EHPM 2019.sav')
-map_shape = gpd.read_file('/content/drive/My Drive/EHPM/SLV_adm2.shp')
+map_shape = gpd.read_file('./data/slv_adm2/SLV_adm2.shp')
 map_shape.columns = map(str.lower, map_shape.columns)
 map_shape['codigomunic'] = map_shape.name_2
-ehpm_merged = ehpm_data.merge(map_shape, how='inner', on='codigomunic')
-#gdf = gpd.GeoDataFrame(ehpm_merged, crs={'init': 'epsg:4326'})
-gdf = gpd.GeoDataFrame(ehpm_merged)
+map_shape['depto'] = map_shape.name_1   
+
+gdf = gf.from_geofeather('./data/ehpm19_merged_sample.feather')
 gdf.crs = "EPSG:4326" 
-map_data = gdf.loc[:, gdf.columns.isin(['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog', 'codigomunic','geometry'])]
-#map_data = gdf[['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog', 'codigomunic','geometry']]
+map_data = gdf.copy()
 map_data["lon"] = gdf.centroid.x
 map_data["lat"] = gdf.centroid.y
-#map_data = map_data.head(50)
-#map_data['index'] = range(1, len(map_data) + 1)
+
+del gdf
 
 # Preparing geojson
-map_shape.to_file("/content/esa.json", driver = "GeoJSON")
+map_shape.to_file("./data/esa.json", driver = "GeoJSON")
 
-with open('/content/esa.json') as response:
+with open('./data/esa.json') as response:
     esa_geoj = json.load(response)
 
 px.set_mapbox_access_token(mb_token)
@@ -61,13 +60,16 @@ image_filename = "/content/drive/My Drive/EHPM/ehpm.png" # replace with your own
 encoded_image = base64.b64encode(open(image_filename, 'rb').read())
 
 #temp = map_data.iloc[:,:-4]
-temp = map_data.loc[:, map_data.columns.isin(['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog'])]
-all_options = temp.to_dict('records')[0]
+#temp = map_data.loc[:, map_data.columns.isin(['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog'])]
+temp = {i for i in map_data[['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog']].columns}
+#all_options = temp.to_dict('records')[0]
 
-temp2 = map_data.loc[:, map_data.columns.isin(['aproba1', 'ingre', 'r106', 'ingfa', 'gastohog'])]
-numeric_options = temp2.to_dict('records')[0]
+#temp2 = map_data.loc[:, map_data.columns.isin(['aproba1', 'ingre', 'r106', 'ingfa', 'gastohog'])]
+temp2 = {i for i in map_data[['aproba1', 'ingre', 'r106', 'ingfa', 'gastohog']].columns}
+#numeric_options = temp2.to_dict('records')[0]
 
-temp3 = map_data.loc[:, map_data.columns.isin(['aproba1', 'ingre', 'r106', 'ingfa', 'gastohog','codigomunic'])]
+#temp3 = map_data.loc[:, map_data.columns.isin(['aproba1', 'ingre', 'r106', 'ingfa', 'gastohog','codigomunic'])].sample(frac=0.25)
+temp3 = map_data[['aproba1', 'r104', 'ingre', 'pobreza', 'segm', 'r106', 'r107', 'ingfa', 'gastohog', 'depto', 'codigomunic']]
 
 app.layout = html.Div(
     html.Div(
@@ -98,12 +100,12 @@ app.layout = html.Div(
                             html.P('Elija la variable para el mapa:'),
                             dcc.RadioItems(
                                 id = 'vars',
-                                options=[{'label': k, 'value': k} for k in all_options.keys()],
+                                options=[{'label': k, 'value': k} for k in temp],
                                 value='aproba1',
                                 labelStyle={'display': 'inline-block'}
                                 ),
                             ], 
-                           className='six columns', 
+                           className='seven columns', 
                            style={'margin-top': '10'}
                   ),
               
@@ -137,7 +139,7 @@ app.layout = html.Div(
                   html.P('Variable para histograma'),
                   dcc.RadioItems(
                       id='numvars',
-                      options=[{'label': k, 'value': k} for k in numeric_options.keys()],
+                      options=[{'label': k, 'value': k} for k in temp2],
                       value='aproba1',
                       labelStyle={'display': 'inline-block'}
                       ),
@@ -153,7 +155,7 @@ app.layout = html.Div(
                            page_current=0,
                            page_size=10,
                            page_action="native",
-                           data=temp.to_dict('records'),
+                           data=temp3.to_dict('records'),
                            filter_action="native",
                            selected_rows=[],
                            selected_columns=[]
@@ -190,7 +192,7 @@ def update_map(variable):
                       locations='codigomunic', featureidkey = "properties.codigomunic" ,
                       color=variable, 
                       color_continuous_scale=px.colors.sequential.RdBu,
-                      range_color=(gdff['variable'].min(), gdff['variable'].max()),
+                      range_color=(gdff[variable].min(), gdff[variable].max()),
                       labels={variable},
                       center={"lat": gdff.lat.mean(), "lon": gdff.lon.mean()},
                       zoom = 7 #mapbox_style="streets"
@@ -257,12 +259,18 @@ def update_graphs(rows, derived_virtual_selected_rows):
 
     colors = ['#7FDBFF' if i in derived_virtual_selected_rows else '#0074D9' for i in range(len(dff))]
     
+    gdff = temp3.copy()
+
     return [
         dcc.Graph(
             id=column,
-            figure=px.bar(temp3, x="codigomunic", y=column, 
-                          title=None, 
-                          color_discrete_sequence=[px.colors.qualitative.Antique[4]]
+            figure=px.histogram(gdff, x="depto", y=column, 
+                          title=None,
+                           color='r104',
+                           histfunc='count',
+                           histnorm='percent',
+                           cumulative=False,
+                           color_discrete_sequence=['#879ea6', '#404352']
                           ),
         )
         # check if column exists - user may have deleted it
